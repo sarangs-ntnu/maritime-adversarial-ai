@@ -72,7 +72,7 @@ def ground_truth_to_dataframe(gt_list: List[GroundTruth]) -> pd.DataFrame:
 def get_all_detections(loader: ScenarioLoader) -> Dict[int, pd.DataFrame]:
     """Get all detections as DataFrames keyed by sensor_id."""
     result = {}
-    for sensor_id in loader.sensor_ids():
+    for sensor_id in loader.sensor_ids:
         dets = loader.get_sensor_detections(sensor_id)
         result[sensor_id] = detections_to_dataframe(dets)
     return result
@@ -81,7 +81,7 @@ def get_all_detections(loader: ScenarioLoader) -> Dict[int, pd.DataFrame]:
 def get_ground_truth(loader: ScenarioLoader) -> Dict[int, pd.DataFrame]:
     """Get all ground truth as DataFrames keyed by target_id."""
     result = {}
-    for target_id in loader.target_ids():
+    for target_id in loader.target_ids:
         gt = loader.get_target_ground_truth(target_id)
         result[target_id] = ground_truth_to_dataframe(gt)
     return result
