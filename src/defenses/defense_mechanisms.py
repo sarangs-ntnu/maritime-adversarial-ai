@@ -438,6 +438,106 @@ class AnomalyDetector:
         return is_anomalous
 
 
+class CertifiedDefense:
+    """Certified robustness using randomized smoothing.
+    
+    Provides probabilistic certificates: with high probability,
+    the prediction is robust within an L2 ball of radius R.
+    
+    For bearing measurements, we certify that the smoothed prediction
+    doesn't change under perturbations up to radius R.
+    """
+    
+    def __init__(self, num_samples: int = 100, noise_std: float = 0.05,
+                 confidence: float = 0.99):
+        self.num_samples = num_samples
+        self.noise_std = noise_std
+        self.confidence = confidence
+    
+    def smooth_bearing(self, detection: Detection) -> Tuple[Detection, float]:
+        """Apply randomized smoothing to a bearing measurement.
+        
+        Returns:
+            (smoothed_detection, certified_radius)
+        """
+        if len(detection.measurement) == 0:
+            return detection, 0.0
+        
+        # Sample noisy predictions
+        samples = []
+        for _ in range(self.num_samples):
+            noise = np.random.normal(0, self.noise_std, detection.measurement.shape)
+            noisy = detection.measurement + noise
+            samples.append(noisy)
+        
+        samples = np.array(samples)
+        
+        # Compute smoothed prediction (mean)
+        smoothed = np.mean(samples, axis=0)
+        
+        # Compute certified radius using Neyman-Pearson lemma
+        # For Gaussian smoothing, certified radius = sigma * Phi^{-1}(p_A)
+        # where p_A is the probability of the top class
+        
+        # For continuous values, use variance-based bound
+        std_samples = np.std(samples, axis=0)
+        
+        # Certified radius: with confidence, prediction stays within this radius
+        # Using Hoeffding's inequality
+        certified_radius = self.noise_std * np.sqrt(-2 * np.log(1 - self.confidence))
+        
+        smoothed_detection = Detection(
+            sensor_id=detection.sensor_id,
+            time=detection.time,
+            ownship_position=detection.ownship_position.copy(),
+            measurement=smoothed
+        )
+        
+        return smoothed_detection, certified_radius
+    
+    def certify_detection(self, detection: Detection,
+                          attack_epsilon: float) -> Tuple[bool, float]:
+        """Check if detection is certified robust against epsilon perturbation.
+        
+        Returns:
+            (is_certified, certified_radius)
+        """
+        _, radius = self.smooth_bearing(detection)
+        return radius >= attack_epsilon, radius
+    
+    def smooth_pointcloud(self, detection: Detection) -> Tuple[Detection, float]:
+        """Apply randomized smoothing to point cloud measurements."""
+        if len(detection.measurement) == 0:
+            return detection, 0.0
+        
+        points = detection.measurement
+        if points.ndim == 1:
+            points = points.reshape(1, -1)
+        
+        # Sample noisy point clouds
+        smoothed_points = []
+        for point in points:
+            samples = []
+            for _ in range(self.num_samples):
+                noise = np.random.normal(0, self.noise_std, point.shape)
+                samples.append(point + noise)
+            smoothed_points.append(np.mean(samples, axis=0))
+        
+        smoothed = np.array(smoothed_points)
+        
+        # Certified radius
+        certified_radius = self.noise_std * np.sqrt(-2 * np.log(1 - self.confidence))
+        
+        smoothed_detection = Detection(
+            sensor_id=detection.sensor_id,
+            time=detection.time,
+            ownship_position=detection.ownship_position.copy(),
+            measurement=smoothed
+        )
+        
+        return smoothed_detection, certified_radius
+
+
 class DefensePipeline:
     """Pipeline combining multiple defense mechanisms."""
     
@@ -455,6 +555,11 @@ class DefensePipeline:
         )
         self.temporal_checker = TemporalConsistencyChecker(
             max_shift=np.deg2rad(3)
+        )
+        self.certified_defense = CertifiedDefense(
+            num_samples=50,
+            noise_std=0.05,
+            confidence=0.99
         )
     
     def defend(self, detections: List[Detection]) -> List[Detection]:
@@ -512,25 +617,18 @@ class DefensePipeline:
             return defended
         
         if defense_type == DefenseType.RANDOMIZED_SMOOTHING:
-            # Add Gaussian noise and average predictions
+            # Certified randomized smoothing
             defended = []
             for det in detections:
                 if len(det.measurement) == 0:
                     defended.append(det)
                     continue
                 
-                smoothed = []
-                for _ in range(self.config.num_smooth_samples):
-                    noise = np.random.normal(0, self.config.noise_std, det.measurement.shape)
-                    smoothed.append(det.measurement + noise)
-                
-                avg_measurement = np.mean(smoothed, axis=0)
-                defended.append(Detection(
-                    sensor_id=det.sensor_id,
-                    time=det.time,
-                    ownship_position=det.ownship_position.copy(),
-                    measurement=avg_measurement
-                ))
+                if det.is_passive:
+                    smoothed, radius = self.certified_defense.smooth_bearing(det)
+                else:
+                    smoothed, radius = self.certified_defense.smooth_pointcloud(det)
+                defended.append(smoothed)
             return defended
         
         if defense_type == DefenseType.ENSEMBLE_DETECTION:

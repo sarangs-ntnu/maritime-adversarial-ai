@@ -267,6 +267,173 @@ def plot_detection_timeline(loader: ScenarioLoader, save_path: Optional[str] = N
     return fig
 
 
+def plot_attack_impact_bearings(benign_dets: List[Detection],
+                                attacked_dets: List[Detection],
+                                sensor_id: int,
+                                save_path: Optional[str] = None):
+    """Plot bearing values over time: benign vs attacked."""
+    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+    
+    sensor_name = SENSOR_NAMES.get(sensor_id, f"Sensor {sensor_id}")
+    
+    # Benign bearings
+    benign_times = [d.time for d in benign_dets if d.sensor_id == sensor_id]
+    benign_bearings = [np.rad2deg(np.mean(d.measurement)) for d in benign_dets if d.sensor_id == sensor_id]
+    
+    # Attacked bearings
+    attacked_times = [d.time for d in attacked_dets if d.sensor_id == sensor_id]
+    attacked_bearings = [np.rad2deg(np.mean(d.measurement)) for d in attacked_dets if d.sensor_id == sensor_id]
+    
+    # Plot benign
+    axes[0].plot(benign_times, benign_bearings, 'b-', linewidth=1, alpha=0.7, label='Benign')
+    axes[0].set_ylabel("Bearing [°]")
+    axes[0].set_title(f"{sensor_name} — Benign Bearings")
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend()
+    
+    # Plot attacked
+    axes[1].plot(attacked_times, attacked_bearings, 'r-', linewidth=1, alpha=0.7, label='Attacked')
+    axes[1].set_xlabel("Time [s]")
+    axes[1].set_ylabel("Bearing [°]")
+    axes[1].set_title(f"{sensor_name} — Attacked Bearings")
+    axes[1].grid(True, alpha=0.3)
+    axes[1].legend()
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    return fig
+
+
+def plot_defense_recovery(benign_dets: List[Detection],
+                          attacked_dets: List[Detection],
+                          defended_dets: List[Detection],
+                          sensor_id: int,
+                          save_path: Optional[str] = None):
+    """Plot bearing values: benign vs attacked vs defended."""
+    fig, ax = plt.subplots(figsize=(14, 6))
+    
+    sensor_name = SENSOR_NAMES.get(sensor_id, f"Sensor {sensor_id}")
+    
+    # Filter by sensor
+    b_dets = [d for d in benign_dets if d.sensor_id == sensor_id]
+    a_dets = [d for d in attacked_dets if d.sensor_id == sensor_id]
+    d_dets = [d for d in defended_dets if d.sensor_id == sensor_id]
+    
+    # Plot
+    if b_dets:
+        times = [d.time for d in b_dets]
+        bearings = [np.rad2deg(np.mean(d.measurement)) for d in b_dets]
+        ax.plot(times, bearings, 'b-', linewidth=1.5, alpha=0.8, label='Benign')
+    
+    if a_dets:
+        times = [d.time for d in a_dets]
+        bearings = [np.rad2deg(np.mean(d.measurement)) for d in a_dets]
+        ax.plot(times, bearings, 'r--', linewidth=1.5, alpha=0.8, label='Attacked')
+    
+    if d_dets:
+        times = [d.time for d in d_dets]
+        bearings = [np.rad2deg(np.mean(d.measurement)) for d in d_dets]
+        ax.plot(times, bearings, 'g:', linewidth=2, alpha=0.9, label='Defended')
+    
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Bearing [°]")
+    ax.set_title(f"{sensor_name} — Attack Impact & Defense Recovery")
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    return fig
+
+
+def plot_metrics_comparison(metrics_dict: Dict[str, Dict],
+                            save_path: Optional[str] = None):
+    """Plot bar chart comparing metrics across conditions.
+    
+    Args:
+        metrics_dict: {condition: {sensor: {metric: value}}}
+            e.g., {'Benign': {'IR': {'det_prob': 0.42}},
+                   'Attacked': {'IR': {'det_prob': 0.04}},
+                   'Defended': {'IR': {'det_prob': 0.41}}}
+    """
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    
+    metric_names = ['detection_probability', 'false_alarm_rate', 'rmse']
+    metric_labels = ['Detection Probability', 'False Alarm Rate', 'RMSE (m)']
+    
+    conditions = list(metrics_dict.keys())
+    colors = ['#2ecc71', '#e74c3c', '#3498db', '#f39c12']
+    
+    for idx, (metric, label) in enumerate(zip(metric_names, metric_labels)):
+        ax = axes[idx]
+        
+        # Get all sensors
+        sensors = set()
+        for cond_data in metrics_dict.values():
+            sensors.update(cond_data.keys())
+        sensors = sorted(sensors)
+        
+        x = np.arange(len(sensors))
+        width = 0.25
+        
+        for i, condition in enumerate(conditions):
+            values = []
+            for sensor in sensors:
+                val = metrics_dict[condition].get(sensor, {}).get(metric, 0)
+                values.append(val)
+            ax.bar(x + i * width, values, width, label=condition, color=colors[i % len(colors)])
+        
+        ax.set_ylabel(label)
+        ax.set_title(label)
+        ax.set_xticks(x + width * (len(conditions) - 1) / 2)
+        ax.set_xticklabels(sensors, rotation=45, ha='right')
+        ax.legend()
+        ax.grid(True, alpha=0.3, axis='y')
+    
+    plt.suptitle("Attack Impact & Defense Recovery Metrics", fontsize=14)
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    return fig
+
+
+def plot_certified_radius(certified_results: List[Tuple[float, float]],
+                          save_path: Optional[str] = None):
+    """Plot certified radius distribution.
+    
+    Args:
+        certified_results: List of (certified_radius, attack_epsilon) tuples
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    radii = [r for r, _ in certified_results]
+    epsilons = [e for _, e in certified_results]
+    
+    # Scatter plot
+    ax.scatter(epsilons, radii, c='blue', alpha=0.5, s=20)
+    
+    # Diagonal line (radius = epsilon)
+    max_val = max(max(radii), max(epsilons))
+    ax.plot([0, max_val], [0, max_val], 'r--', linewidth=2, label='Certified boundary')
+    
+    # Fill certified region
+    ax.fill_between([0, max_val], [0, max_val], [max_val, max_val], 
+                    alpha=0.1, color='green', label='Certified robust')
+    
+    ax.set_xlabel("Attack Epsilon [rad]")
+    ax.set_ylabel("Certified Radius [rad]")
+    ax.set_title("Certified Robustness: Radius vs Attack Strength")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    return fig
+
+
 if __name__ == "__main__":
     import sys
     project_root = str(Path(__file__).parent.parent.parent)

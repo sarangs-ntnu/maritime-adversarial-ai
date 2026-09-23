@@ -33,8 +33,13 @@ from attacks.radar_lidar_attacks import PointCloudAttacker, PointCloudAttackConf
 from attacks.fusion_attacks import FusionAttacker, FusionAttackConfig as FusionConfig, FusionAttackType as FusionType, JIPDASimulator
 from attacks.physical_eot import MaritimeEOT, MaritimeEnvironmentParams
 from evaluation.metrics import DetectionEvaluator, AttackEvaluator
-from defenses.defense_mechanisms import DefensePipeline, DefenseConfig, DefenseType
+from defenses.defense_mechanisms import DefensePipeline, DefenseConfig, DefenseType, CertifiedDefense
 from pipeline import AdversarialPipeline, PipelineConfig
+from visualization.plot_utils import (
+    plot_scenario_overview, plot_all_sensors, plot_detection_timeline,
+    plot_attack_impact_bearings, plot_defense_recovery, plot_metrics_comparison,
+    plot_certified_radius
+)
 
 
 def phase1_data_loading():
@@ -93,14 +98,18 @@ def phase2a_camera_attacks(loader):
     
     # Test different attack types
     attack_types = [
-        (CamType.FGSM, "FGSM"),
-        (CamType.PGD, "PGD"),
-        (CamType.UNIVERSAL, "Universal"),
-        (CamType.BACKDOOR, "Backdoor"),
+        (CamType.FGSM, "FGSM", {"epsilon": 0.1}),
+        (CamType.PGD, "PGD", {"epsilon": 0.1, "alpha": 0.02, "num_steps": 20}),
+        (CamType.BIM, "BIM", {"epsilon": 0.1, "alpha": 0.02, "num_steps": 20}),
+        (CamType.CW, "C&W", {"epsilon": 0.1, "num_steps": 40}),
+        (CamType.UNIVERSAL, "Universal", {"epsilon": 0.1}),
+        (CamType.BACKDOOR, "Backdoor", {"epsilon": 0.1}),
     ]
     
-    for attack_type, name in attack_types:
-        config = CamConfig(attack_type, epsilon=0.1)
+    evaluator = AttackEvaluator(loader)
+    
+    for attack_type, name, kwargs in attack_types:
+        config = CamConfig(attack_type, **kwargs)
         attacker = CameraAdversarialAttacker(config)
         attacked = attacker.attack(det)
         
@@ -108,6 +117,12 @@ def phase2a_camera_attacks(loader):
         print(f"\n  {name} Attack:")
         print(f"    Attacked bearing: {np.rad2deg(attacked.measurement[0]):.2f}°")
         print(f"    Shift: {shift:.4f}°")
+        
+        # Evaluate on all IR detections
+        attacked_dets = [attacker.attack(d) for d in ir_dets]
+        metrics = evaluator.evaluate_camera_attack(ir_dets, attacked_dets, 3)
+        print(f"    Mean perturbation: {np.rad2deg(metrics.mean_perturbation):.4f}°")
+        print(f"    Attack success rate: {metrics.attack_success_rate:.2%}")
 
 
 def phase2b_radar_lidar_attacks(loader):
@@ -465,6 +480,152 @@ def full_pipeline_demo():
     print("\nDefense results saved!")
 
 
+def phase6_visualization(loader):
+    """Phase 6: Generate visualization plots."""
+    print("\n" + "=" * 70)
+    print("PHASE 6: VISUALIZATION")
+    print("=" * 70)
+    
+    import matplotlib
+    matplotlib.use('Agg')  # Non-interactive backend
+    
+    results_dir = Path("results")
+    results_dir.mkdir(exist_ok=True)
+    
+    print("\nGenerating scenario overview...")
+    plot_scenario_overview(loader, save_path=results_dir / "scenario_overview.png")
+    print("  Saved: scenario_overview.png")
+    
+    print("\nGenerating all sensors plot...")
+    plot_all_sensors(loader, save_path=results_dir / "all_sensors.png")
+    print("  Saved: all_sensors.png")
+    
+    print("\nGenerating detection timeline...")
+    plot_detection_timeline(loader, save_path=results_dir / "detection_timeline.png")
+    print("  Saved: detection_timeline.png")
+    
+    # Generate attack impact visualization
+    print("\nGenerating attack impact plots...")
+    
+    # Camera attack
+    ir_dets = [d for d in loader.detections if d.sensor_id == 3 and len(d.measurement) > 0]
+    if ir_dets:
+        config = CamConfig(CamType.FGSM, epsilon=0.1)
+        attacker = CameraAdversarialAttacker(config)
+        attacked_ir = [attacker.attack(d) for d in ir_dets]
+        
+        plot_attack_impact_bearings(
+            ir_dets, attacked_ir, 3,
+            save_path=results_dir / "attack_impact_ir.png"
+        )
+        print("  Saved: attack_impact_ir.png")
+    
+    # Defense recovery visualization
+    print("\nGenerating defense recovery plots...")
+    
+    dets = loader.detections.copy()
+    cam_config = CamConfig(CamType.FGSM, epsilon=0.1)
+    cam_attacker = CameraAdversarialAttacker(cam_config)
+    
+    attacked_dets = []
+    for d in dets:
+        if d.sensor_id in [3, 4]:
+            attacked_dets.append(cam_attacker.attack(d))
+        else:
+            attacked_dets.append(d)
+    
+    # Apply defense
+    defense_config = DefenseConfig(DefenseType.ALL)
+    defense = DefensePipeline(defense_config)
+    defense.temporal_checker.train(dets)
+    defended_dets = defense.defend(attacked_dets)
+    
+    plot_defense_recovery(
+        dets, attacked_dets, defended_dets, 3,
+        save_path=results_dir / "defense_recovery_ir.png"
+    )
+    print("  Saved: defense_recovery_ir.png")
+    
+    # Metrics comparison
+    print("\nGenerating metrics comparison...")
+    
+    evaluator = DetectionEvaluator(distance_threshold=50.0)
+    from collections import defaultdict
+    
+    def compute_metrics(detections_list):
+        dets_by_time = defaultdict(list)
+        for d in detections_list:
+            dets_by_time[d.time].append(d)
+        
+        gt_by_time = {}
+        for i, timestep in enumerate(loader.ground_truth):
+            if timestep and i < len(loader.detections):
+                gt_by_time[loader.detections[i].time] = timestep
+        
+        metrics = {}
+        for sid in [1, 2, 3, 4]:
+            total_matched = 0
+            total_gt = 0
+            total_fa = 0
+            total_dets = 0
+            errors = []
+            
+            for t, dets_at_t in dets_by_time.items():
+                gt_at_t = gt_by_time.get(t, [])
+                if not gt_at_t:
+                    continue
+                s_dets = [d for d in dets_at_t if d.sensor_id == sid]
+                if not s_dets:
+                    continue
+                m = evaluator.evaluate(s_dets, gt_at_t, sid)
+                if m.rmse_position > 0:
+                    errors.append(m.rmse_position)
+                total_matched += int(m.detection_probability * len(gt_at_t))
+                total_gt += len(gt_at_t)
+                total_fa += int(m.false_alarm_rate * len(s_dets))
+                total_dets += len(s_dets)
+            
+            metrics[SENSOR_NAMES[sid]] = {
+                'detection_probability': total_matched / max(total_gt, 1),
+                'false_alarm_rate': total_fa / max(total_dets, 1),
+                'rmse': np.mean(errors) if errors else 0
+            }
+        return metrics
+    
+    benign_metrics = compute_metrics(dets)
+    attacked_metrics = compute_metrics(attacked_dets)
+    defended_metrics = compute_metrics(defended_dets)
+    
+    metrics_dict = {
+        'Benign': benign_metrics,
+        'Attacked': attacked_metrics,
+        'Defended': defended_metrics
+    }
+    
+    plot_metrics_comparison(
+        metrics_dict,
+        save_path=results_dir / "metrics_comparison.png"
+    )
+    print("  Saved: metrics_comparison.png")
+    
+    # Certified radius plot
+    print("\nGenerating certified robustness plot...")
+    certifier = CertifiedDefense(num_samples=50, noise_std=0.05)
+    
+    certified_results = []
+    for det in ir_dets[:50]:  # Sample 50 detections
+        _, radius = certifier.smooth_bearing(det)
+        certified_results.append((radius, 0.1))  # Compare against epsilon=0.1
+    
+    plot_certified_radius(
+        certified_results,
+        save_path=results_dir / "certified_radius.png"
+    )
+    print("  Saved: certified_radius.png")
+    
+    print(f"\nAll plots saved to {results_dir}/")
+
+
 def main():
     """Run all demo phases."""
     print("\n" + "=" * 70)
@@ -487,6 +648,9 @@ def main():
     
     # Phase 5: Defenses
     phase5_defenses(loader)
+    
+    # Phase 6: Visualization
+    phase6_visualization(loader)
     
     # Full Pipeline
     full_pipeline_demo()

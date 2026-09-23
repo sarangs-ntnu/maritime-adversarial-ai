@@ -38,6 +38,8 @@ except ImportError:
 class AttackType(Enum):
     FGSM = "fgsm"
     PGD = "pgd"
+    BIM = "bim"  # Basic Iterative Method
+    CW = "cw"    # Carlini & Wagner
     UNIVERSAL = "universal"
     BACKDOOR = "backdoor"
     RANDOM = "random"
@@ -84,6 +86,10 @@ class CameraAdversarialAttacker:
             perturbed = self._fgsm_attack(original_measurement, gradient_fn)
         elif self.config.attack_type == AttackType.PGD:
             perturbed = self._pgd_attack(original_measurement, gradient_fn)
+        elif self.config.attack_type == AttackType.BIM:
+            perturbed = self._bim_attack(original_measurement, gradient_fn)
+        elif self.config.attack_type == AttackType.CW:
+            perturbed = self._cw_attack(original_measurement, gradient_fn)
         elif self.config.attack_type == AttackType.UNIVERSAL:
             perturbed = self._universal_attack(original_measurement)
         elif self.config.attack_type == AttackType.BACKDOOR:
@@ -164,6 +170,87 @@ class CameraAdversarialAttacker:
             
             # Clip to valid range
             perturbed = np.clip(perturbed, -np.pi, np.pi)
+        
+        return perturbed
+    
+    def _bim_attack(self, measurement: np.ndarray,
+                    gradient_fn: Optional[Callable]) -> np.ndarray:
+        """Basic Iterative Method (BIM / I-FGSM).
+        
+        Iterative FGSM that starts from the original point (not random).
+        More stable than PGD but less exploratory.
+        """
+        perturbed = measurement.copy()
+        
+        for step in range(self.config.num_steps):
+            if gradient_fn is None:
+                gradient = np.random.randn(*measurement.shape)
+            else:
+                gradient = gradient_fn(perturbed)
+            
+            if np.all(gradient == 0):
+                gradient = np.random.randn(*measurement.shape)
+            
+            # Gradient step (always untargeted for BIM)
+            perturbed = perturbed + self.config.alpha * np.sign(gradient)
+            
+            # Project back to epsilon ball around original
+            perturbation = perturbed - measurement
+            perturbation = np.clip(perturbation, -self.config.epsilon, self.config.epsilon)
+            perturbed = measurement + perturbation
+            
+            # Clip to valid range
+            perturbed = np.clip(perturbed, -np.pi, np.pi)
+        
+        return perturbed
+    
+    def _cw_attack(self, measurement: np.ndarray,
+                   gradient_fn: Optional[Callable]) -> np.ndarray:
+        """Carlini & Wagner (C&W) attack.
+        
+        Optimization-based attack that minimizes perturbation magnitude
+        while ensuring misclassification. Uses L2 norm and tanh-space
+        transformation for box constraints.
+        
+        For bearing measurements, we optimize:
+            minimize ||perturbation||_2 + c * f(perturbed)
+        where f is a loss function encouraging misclassification.
+        """
+        # C&W hyperparameters
+        c = 1.0  # Trade-off parameter
+        learning_rate = 0.01
+        max_iter = self.config.num_steps * 2
+        
+        # Initialize perturbation
+        perturbation = np.zeros_like(measurement)
+        
+        for step in range(max_iter):
+            # Current perturbed measurement
+            perturbed = measurement + perturbation
+            
+            # Compute gradient of loss w.r.t. perturbation
+            if gradient_fn is None:
+                # Use distance-based loss: maximize distance from true bearing
+                loss_gradient = 2 * (perturbed - measurement)
+                # Add term to push away from true value
+                loss_gradient += c * np.sign(perturbed - measurement)
+            else:
+                loss_gradient = gradient_fn(perturbed)
+            
+            # Gradient descent on perturbation
+            perturbation = perturbation - learning_rate * loss_gradient
+            
+            # Project to epsilon ball (L2 norm)
+            l2_norm = np.linalg.norm(perturbation)
+            if l2_norm > self.config.epsilon:
+                perturbation = perturbation * (self.config.epsilon / l2_norm)
+            
+            # Early stopping if perturbation is small but effective
+            if l2_norm < self.config.epsilon * 0.1 and step > 10:
+                break
+        
+        perturbed = measurement + perturbation
+        perturbed = np.clip(perturbed, -np.pi, np.pi)
         
         return perturbed
     

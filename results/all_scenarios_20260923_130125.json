@@ -1,0 +1,392 @@
+[
+  {
+    "scenario": "scenario2",
+    "num_targets": 2,
+    "num_detections": 1907,
+    "benign": {
+      "tracks": 4,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.3782051282051282,
+          "false_alarm_rate": 0.2264957264957265,
+          "rmse": 9.615809794328817
+        },
+        "Radar": {
+          "detection_probability": 0.03571428571428571,
+          "false_alarm_rate": 0.9285714285714286,
+          "rmse": 35.978855480551495
+        },
+        "IR": {
+          "detection_probability": 0.41847826086956524,
+          "false_alarm_rate": 0.03458498023715415,
+          "rmse": 0.055647363077106014
+        },
+        "EO": {
+          "detection_probability": 0.42470389170896783,
+          "false_alarm_rate": 0.1505922165820643,
+          "rmse": 0.029095725243278532
+        }
+      }
+    },
+    "camera_attack": {
+      "tracks": 4,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.3782051282051282,
+          "false_alarm_rate": 0.2264957264957265,
+          "rmse": 9.615809794328817
+        },
+        "Radar": {
+          "detection_probability": 0.03571428571428571,
+          "false_alarm_rate": 0.9285714285714286,
+          "rmse": 35.978855480551495
+        },
+        "IR": {
+          "detection_probability": 0.383399209486166,
+          "false_alarm_rate": 0.10474308300395258,
+          "rmse": 0.09025956327946837
+        },
+        "EO": {
+          "detection_probability": 0.41539763113367173,
+          "false_alarm_rate": 0.1692047377326565,
+          "rmse": 0.0946534092134246
+        }
+      }
+    },
+    "pc_attack": {
+      "tracks": 4,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.3782051282051282,
+          "false_alarm_rate": 0.24358974358974358,
+          "rmse": 9.615809794328817
+        },
+        "Radar": {
+          "detection_probability": 0.03571428571428571,
+          "false_alarm_rate": 0.9285714285714286,
+          "rmse": 35.978855480551495
+        },
+        "IR": {
+          "detection_probability": 0.41847826086956524,
+          "false_alarm_rate": 0.03458498023715415,
+          "rmse": 0.055647363077106014
+        },
+        "EO": {
+          "detection_probability": 0.42470389170896783,
+          "false_alarm_rate": 0.1505922165820643,
+          "rmse": 0.029095725243278532
+        }
+      }
+    },
+    "combined_attack": {
+      "tracks": 4,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.3803418803418803,
+          "false_alarm_rate": 0.23931623931623933,
+          "rmse": 9.704838612023103
+        },
+        "Radar": {
+          "detection_probability": 0.03571428571428571,
+          "false_alarm_rate": 0.9285714285714286,
+          "rmse": 35.978855480551495
+        },
+        "IR": {
+          "detection_probability": 0.3893280632411067,
+          "false_alarm_rate": 0.09288537549407115,
+          "rmse": 0.0894270145830469
+        },
+        "EO": {
+          "detection_probability": 0.41624365482233505,
+          "false_alarm_rate": 0.16751269035532995,
+          "rmse": 0.09499253886664173
+        }
+      }
+    },
+    "defended": {
+      "tracks": 4,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.3803418803418803,
+          "false_alarm_rate": 0.23931623931623933,
+          "rmse": 9.704838612023103
+        },
+        "Radar": {
+          "detection_probability": 0.03571428571428571,
+          "false_alarm_rate": 0.9285714285714286,
+          "rmse": 35.978855480551495
+        },
+        "IR": {
+          "detection_probability": 0.4174901185770751,
+          "false_alarm_rate": 0.036561264822134384,
+          "rmse": 0.06772274121486717
+        },
+        "EO": {
+          "detection_probability": 0.41878172588832485,
+          "false_alarm_rate": 0.16243654822335024,
+          "rmse": 0.07972800901063982
+        }
+      }
+    }
+  },
+  {
+    "scenario": "scenario3",
+    "num_targets": 2,
+    "num_detections": 2107,
+    "benign": {
+      "tracks": 2,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.10424710424710425,
+          "false_alarm_rate": 0.4517374517374517,
+          "rmse": 6.148434759333338
+        },
+        "Radar": {
+          "detection_probability": 0.019230769230769232,
+          "false_alarm_rate": 0.9615384615384616,
+          "rmse": 40.577857858434804
+        },
+        "IR": {
+          "detection_probability": 0.5,
+          "false_alarm_rate": 0.0,
+          "rmse": 0.06516732401859757
+        },
+        "EO": {
+          "detection_probability": 0.498468606431853,
+          "false_alarm_rate": 0.0030627871362940277,
+          "rmse": 0.035501906978858494
+        }
+      }
+    },
+    "camera_attack": {
+      "tracks": 2,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.10424710424710425,
+          "false_alarm_rate": 0.4517374517374517,
+          "rmse": 6.148434759333338
+        },
+        "Radar": {
+          "detection_probability": 0.019230769230769232,
+          "false_alarm_rate": 0.9615384615384616,
+          "rmse": 40.577857858434804
+        },
+        "IR": {
+          "detection_probability": 0.41674127126230975,
+          "false_alarm_rate": 0.1665174574753805,
+          "rmse": 0.06335419115061149
+        },
+        "EO": {
+          "detection_probability": 0.4885145482388974,
+          "false_alarm_rate": 0.022970903522205207,
+          "rmse": 0.08913178739749898
+        }
+      }
+    },
+    "pc_attack": {
+      "tracks": 2,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.11196911196911197,
+          "false_alarm_rate": 0.7760617760617761,
+          "rmse": 7.799836248798195
+        },
+        "Radar": {
+          "detection_probability": 0.019230769230769232,
+          "false_alarm_rate": 0.9615384615384616,
+          "rmse": 40.577857858434804
+        },
+        "IR": {
+          "detection_probability": 0.5,
+          "false_alarm_rate": 0.0,
+          "rmse": 0.06516732401859757
+        },
+        "EO": {
+          "detection_probability": 0.498468606431853,
+          "false_alarm_rate": 0.0030627871362940277,
+          "rmse": 0.035501906978858494
+        }
+      }
+    },
+    "combined_attack": {
+      "tracks": 2,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.11583011583011583,
+          "false_alarm_rate": 0.7683397683397684,
+          "rmse": 9.177744897684132
+        },
+        "Radar": {
+          "detection_probability": 0.019230769230769232,
+          "false_alarm_rate": 0.9615384615384616,
+          "rmse": 40.577857858434804
+        },
+        "IR": {
+          "detection_probability": 0.41718889883616833,
+          "false_alarm_rate": 0.1656222023276634,
+          "rmse": 0.06501422194840692
+        },
+        "EO": {
+          "detection_probability": 0.48621745788667686,
+          "false_alarm_rate": 0.027565084226646247,
+          "rmse": 0.08796808300934632
+        }
+      }
+    },
+    "defended": {
+      "tracks": 2,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.11583011583011583,
+          "false_alarm_rate": 0.7683397683397684,
+          "rmse": 9.177744897684132
+        },
+        "Radar": {
+          "detection_probability": 0.019230769230769232,
+          "false_alarm_rate": 0.9615384615384616,
+          "rmse": 40.577857858434804
+        },
+        "IR": {
+          "detection_probability": 0.4901521933751119,
+          "false_alarm_rate": 0.019695613249776187,
+          "rmse": 0.07033408818308401
+        },
+        "EO": {
+          "detection_probability": 0.498468606431853,
+          "false_alarm_rate": 0.0030627871362940277,
+          "rmse": 0.04844724859593171
+        }
+      }
+    }
+  },
+  {
+    "scenario": "scenario4",
+    "num_targets": 2,
+    "num_detections": 1604,
+    "benign": {
+      "tracks": 2,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.11421319796954314,
+          "false_alarm_rate": 0.5786802030456852,
+          "rmse": 4.305297559325982
+        },
+        "Radar": {
+          "detection_probability": 0.059322033898305086,
+          "false_alarm_rate": 0.8813559322033898,
+          "rmse": 6.625956581224315
+        },
+        "IR": {
+          "detection_probability": 0.3507638072855464,
+          "false_alarm_rate": 0.0023501762632197414,
+          "rmse": 0.05172879186645984
+        },
+        "EO": {
+          "detection_probability": 0.5,
+          "false_alarm_rate": 0.0,
+          "rmse": 0.0199612141104894
+        }
+      }
+    },
+    "camera_attack": {
+      "tracks": 2,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.11421319796954314,
+          "false_alarm_rate": 0.5786802030456852,
+          "rmse": 4.305297559325982
+        },
+        "Radar": {
+          "detection_probability": 0.059322033898305086,
+          "false_alarm_rate": 0.8813559322033898,
+          "rmse": 6.625956581224315
+        },
+        "IR": {
+          "detection_probability": 0.3137485311398355,
+          "false_alarm_rate": 0.07638072855464159,
+          "rmse": 0.0746687055912862
+        },
+        "EO": {
+          "detection_probability": 0.49899396378269617,
+          "false_alarm_rate": 0.002012072434607646,
+          "rmse": 0.09247352821716635
+        }
+      }
+    },
+    "pc_attack": {
+      "tracks": 3,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.116751269035533,
+          "false_alarm_rate": 0.766497461928934,
+          "rmse": 4.874767792807751
+        },
+        "Radar": {
+          "detection_probability": 0.059322033898305086,
+          "false_alarm_rate": 0.8813559322033898,
+          "rmse": 6.625956581224315
+        },
+        "IR": {
+          "detection_probability": 0.3507638072855464,
+          "false_alarm_rate": 0.0023501762632197414,
+          "rmse": 0.05172879186645984
+        },
+        "EO": {
+          "detection_probability": 0.5,
+          "false_alarm_rate": 0.0,
+          "rmse": 0.0199612141104894
+        }
+      }
+    },
+    "combined_attack": {
+      "tracks": 3,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.1218274111675127,
+          "false_alarm_rate": 0.7563451776649747,
+          "rmse": 5.643135819849204
+        },
+        "Radar": {
+          "detection_probability": 0.059322033898305086,
+          "false_alarm_rate": 0.8813559322033898,
+          "rmse": 6.625956581224315
+        },
+        "IR": {
+          "detection_probability": 0.31786133960047,
+          "false_alarm_rate": 0.0681551116333725,
+          "rmse": 0.07718833356530622
+        },
+        "EO": {
+          "detection_probability": 0.5,
+          "false_alarm_rate": 0.0,
+          "rmse": 0.09341742863427031
+        }
+      }
+    },
+    "defended": {
+      "tracks": 3,
+      "metrics": {
+        "Lidar": {
+          "detection_probability": 0.1218274111675127,
+          "false_alarm_rate": 0.7563451776649747,
+          "rmse": 5.643135819849204
+        },
+        "Radar": {
+          "detection_probability": 0.059322033898305086,
+          "false_alarm_rate": 0.8813559322033898,
+          "rmse": 6.625956581224315
+        },
+        "IR": {
+          "detection_probability": 0.3484136310223267,
+          "false_alarm_rate": 0.007050528789659225,
+          "rmse": 0.05269581601630179
+        },
+        "EO": {
+          "detection_probability": 0.5,
+          "false_alarm_rate": 0.0,
+          "rmse": 0.04869170171805147
+        }
+      }
+    }
+  }
+]
