@@ -1,0 +1,42 @@
+{
+  "No Attack": {
+    "benign_tracks": 4,
+    "attacked_tracks": 4,
+    "track_loss": 0
+  },
+  "Camera FGSM": {
+    "benign_tracks": 4,
+    "attacked_tracks": 4,
+    "track_loss": 0
+  },
+  "Camera PGD": {
+    "benign_tracks": 4,
+    "attacked_tracks": 4,
+    "track_loss": 0
+  },
+  "Point Cloud Ghost": {
+    "benign_tracks": 4,
+    "attacked_tracks": 4,
+    "track_loss": 0
+  },
+  "Point Cloud Split": {
+    "benign_tracks": 4,
+    "attacked_tracks": 4,
+    "track_loss": 0
+  },
+  "Fusion Existence": {
+    "benign_tracks": 4,
+    "attacked_tracks": 7,
+    "track_loss": -3
+  },
+  "Fusion False Track": {
+    "benign_tracks": 4,
+    "attacked_tracks": 4,
+    "track_loss": 0
+  },
+  "Combined Camera+PC": {
+    "benign_tracks": 4,
+    "attacked_tracks": 4,
+    "track_loss": 0
+  }
+}

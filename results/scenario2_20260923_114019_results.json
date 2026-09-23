@@ -1,0 +1,191 @@
+{
+  "benign": {
+    "tracks": {
+      "7": {
+        "state": [
+          24.41907481496159,
+          -392.8506999654874,
+          1.4815227200096324,
+          1.6948703438150803
+        ]
+      },
+      "25": {
+        "state": [
+          25.29192157893805,
+          -357.80398243273754,
+          1.8440117659959876,
+          -6.942102486193951
+        ]
+      },
+      "26": {
+        "state": [
+          22.09343719482422,
+          -324.4087681096953,
+          0.0,
+          0.0
+        ]
+      },
+      "27": {
+        "state": [
+          219.11567687988284,
+          -341.700777253929,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "metrics": {
+      "Lidar": {
+        "rmse_position": 4.892553307660985,
+        "rmse_bearing": 0.0,
+        "detection_probability": 0.37105263157894736,
+        "false_alarm_rate": 0.2578947368421053,
+        "mean_error": 0.0,
+        "max_error": 0.0
+      },
+      "Radar": {
+        "rmse_position": 0.0,
+        "rmse_bearing": 0.0,
+        "detection_probability": 0.0,
+        "false_alarm_rate": 1.0,
+        "mean_error": 0.0,
+        "max_error": 0.0
+      },
+      "IR": {
+        "rmse_position": 0.055362167246031845,
+        "rmse_bearing": 0.0,
+        "detection_probability": 0.4168432203389831,
+        "false_alarm_rate": 0.028601694915254237,
+        "mean_error": 0.0,
+        "max_error": 0.0
+      },
+      "EO": {
+        "rmse_position": 0.02949708933950227,
+        "rmse_bearing": 0.0,
+        "detection_probability": 0.4206963249516441,
+        "false_alarm_rate": 0.15860735009671179,
+        "mean_error": 0.0,
+        "max_error": 0.0
+      }
+    },
+    "num_detections": 1675
+  },
+  "attacked": {
+    "tracks": {
+      "109": {
+        "state": [
+          -62.13070024735965,
+          -617.7538663990406,
+          -4.315785225732847,
+          -29.089288405466398
+        ]
+      },
+      "111": {
+        "state": [
+          111.50290793125694,
+          -383.52516824289575,
+          -0.9626398519337301,
+          -37.119480449984806
+        ]
+      },
+      "112": {
+        "state": [
+          90.5594411269147,
+          -419.13571018988097,
+          0.0,
+          0.0
+        ]
+      },
+      "113": {
+        "state": [
+          -18.297311613508704,
+          -355.1146397104591,
+          0.0,
+          0.0
+        ]
+      },
+      "114": {
+        "state": [
+          -59.570431337076045,
+          -428.720048330488,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "metrics": {
+      "Lidar": {
+        "rmse_position": 12.99662468568144,
+        "rmse_bearing": 0.0,
+        "detection_probability": 0.011560693641618497,
+        "false_alarm_rate": 0.976878612716763,
+        "mean_error": 0.0,
+        "max_error": 0.0
+      },
+      "Radar": {
+        "rmse_position": 0.0,
+        "rmse_bearing": 0.0,
+        "detection_probability": 0.0,
+        "false_alarm_rate": 1.0,
+        "mean_error": 0.0,
+        "max_error": 0.0
+      },
+      "IR": {
+        "rmse_position": 0.08704916073799632,
+        "rmse_bearing": 0.0,
+        "detection_probability": 0.3895169578622816,
+        "false_alarm_rate": 0.08735868448098665,
+        "mean_error": 0.0,
+        "max_error": 0.0
+      },
+      "EO": {
+        "rmse_position": 0.09307882459954572,
+        "rmse_bearing": 0.0,
+        "detection_probability": 0.42066420664206644,
+        "false_alarm_rate": 0.15867158671586715,
+        "mean_error": 0.0,
+        "max_error": 0.0
+      }
+    },
+    "num_detections": 1724
+  },
+  "comparison": {
+    "num_tracks_benign": 4,
+    "num_tracks_attacked": 5,
+    "track_loss": -1,
+    "sensor_metrics": {
+      "Lidar": {
+        "rmse_benign": 0,
+        "rmse_attacked": 0,
+        "det_prob_benign": 0.37105263157894736,
+        "det_prob_attacked": 0.011560693641618497,
+        "far_benign": 0.2578947368421053,
+        "far_attacked": 0.976878612716763
+      },
+      "Radar": {
+        "rmse_benign": 0,
+        "rmse_attacked": 0,
+        "det_prob_benign": 0.0,
+        "det_prob_attacked": 0.0,
+        "far_benign": 1.0,
+        "far_attacked": 1.0
+      },
+      "IR": {
+        "rmse_benign": 0,
+        "rmse_attacked": 0,
+        "det_prob_benign": 0.4168432203389831,
+        "det_prob_attacked": 0.3895169578622816,
+        "far_benign": 0.028601694915254237,
+        "far_attacked": 0.08735868448098665
+      },
+      "EO": {
+        "rmse_benign": 0,
+        "rmse_attacked": 0,
+        "det_prob_benign": 0.4206963249516441,
+        "det_prob_attacked": 0.42066420664206644,
+        "far_benign": 0.15860735009671179,
+        "far_attacked": 0.15867158671586715
+      }
+    }
+  }
+}
