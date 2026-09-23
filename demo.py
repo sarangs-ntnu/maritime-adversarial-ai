@@ -626,6 +626,176 @@ def phase6_visualization(loader):
     print(f"\nAll plots saved to {results_dir}/")
 
 
+def phase7_advanced_fusion_attacks(loader):
+    """Phase 7: Advanced track-oriented fusion attacks and defenses."""
+    print("\n" + "=" * 70)
+    print("PHASE 7: ADVANCED FUSION ATTACKS & DEFENSES")
+    print("=" * 70)
+    
+    from attacks.fusion_attacks import FusionAttacker, FusionAttackConfig, FusionAttackType
+    from defenses.defense_mechanisms import DefensePipeline, DefenseConfig, DefenseType
+    from evaluation.metrics import DetectionEvaluator
+    from collections import defaultdict
+    
+    evaluator = DetectionEvaluator(distance_threshold=50.0)
+    
+    def eval_per_timestep(detections_list, sensor_id):
+        dets_by_time = defaultdict(list)
+        for d in detections_list:
+            dets_by_time[d.time].append(d)
+        
+        gt_by_time = {}
+        for i, timestep in enumerate(loader.ground_truth):
+            if timestep and i < len(loader.detections):
+                gt_by_time[loader.detections[i].time] = timestep
+        
+        total_matched = 0
+        total_gt = 0
+        for t, dets_at_t in dets_by_time.items():
+            gt_at_t = gt_by_time.get(t, [])
+            if not gt_at_t:
+                continue
+            s_dets = [d for d in dets_at_t if d.sensor_id == sensor_id]
+            if not s_dets:
+                continue
+            m = evaluator.evaluate(s_dets, gt_at_t, sensor_id)
+            total_matched += int(m.detection_probability * len(gt_at_t))
+            total_gt += len(gt_at_t)
+        
+        return total_matched / max(total_gt, 1)
+    
+    # Test track deletion attack
+    print("\n--- Track Deletion Attack ---")
+    config = FusionAttackConfig(FusionAttackType.TRACK_DELETION)
+    attacker = FusionAttacker(config)
+    attacked = attacker.attack_scenario(loader)
+    
+    attacked_list = []
+    for t in sorted(attacked.keys()):
+        attacked_list.extend(attacked[t])
+    
+    print(f"  Attacked detections: {len(attacked_list)}")
+    for sid in [1, 2, 3, 4]:
+        dp = eval_per_timestep(attacked_list, sid)
+        print(f"    {SENSOR_NAMES[sid]} DetProb: {dp:.3f}")
+    
+    # Test track swap attack
+    print("\n--- Track Swap Attack ---")
+    config = FusionAttackConfig(FusionAttackType.TRACK_SWAP)
+    attacker = FusionAttacker(config)
+    attacked = attacker.attack_scenario(loader)
+    
+    attacked_list = []
+    for t in sorted(attacked.keys()):
+        attacked_list.extend(attacked[t])
+    
+    print(f"  Attacked detections: {len(attacked_list)}")
+    for sid in [1, 2, 3, 4]:
+        dp = eval_per_timestep(attacked_list, sid)
+        print(f"    {SENSOR_NAMES[sid]} DetProb: {dp:.3f}")
+    
+    # Test stealthy degradation attack
+    print("\n--- Stealthy Degradation Attack ---")
+    config = FusionAttackConfig(FusionAttackType.STEALTHY_DEGRADATION)
+    attacker = FusionAttacker(config)
+    attacked = attacker.attack_scenario(loader)
+    
+    attacked_list = []
+    for t in sorted(attacked.keys()):
+        attacked_list.extend(attacked[t])
+    
+    print(f"  Attacked detections: {len(attacked_list)}")
+    for sid in [1, 2, 3, 4]:
+        dp = eval_per_timestep(attacked_list, sid)
+        print(f"    {SENSOR_NAMES[sid]} DetProb: {dp:.3f}")
+    
+    # Adversarial Training Defense
+    print("\n--- Adversarial Training Defense ---")
+    
+    # Create benign and attacked datasets
+    benign_dets = loader.detections.copy()
+    
+    # Generate attacked data for training
+    pc_config = PCConfig(PCType.GHOST_INJECTION, epsilon=5.0)
+    pc_attacker = PointCloudAttacker(pc_config)
+    cam_config = CamConfig(CamType.FGSM, epsilon=0.1)
+    cam_attacker = CameraAdversarialAttacker(cam_config)
+    
+    train_attacked = []
+    for d in benign_dets:
+        if d.sensor_id in [1, 2]:
+            train_attacked.append(pc_attacker.attack(d))
+        elif d.sensor_id in [3, 4]:
+            train_attacked.append(cam_attacker.attack(d))
+        else:
+            train_attacked.append(d)
+    
+    # Train adversarial defense
+    defense_config = DefenseConfig(DefenseType.ADVERSARIAL_TRAINING)
+    defense = DefensePipeline(defense_config)
+    defense.train_adversarial(benign_dets, train_attacked)
+    
+    # Apply to new attacked data
+    test_attacked = []
+    for d in benign_dets:
+        if d.sensor_id in [1, 2]:
+            test_attacked.append(pc_attacker.attack(d))
+        elif d.sensor_id in [3, 4]:
+            test_attacked.append(cam_attacker.attack(d))
+        else:
+            test_attacked.append(d)
+    
+    defended = defense.defend(test_attacked)
+    
+    print("\n  Detection Probability (Benign -> Attacked -> AdvTrained):")
+    for sid in [1, 2, 3, 4]:
+        benign_dp = eval_per_timestep(benign_dets, sid)
+        attacked_dp = eval_per_timestep(test_attacked, sid)
+        defended_dp = eval_per_timestep(defended, sid)
+        print(f"    {SENSOR_NAMES[sid]}: {benign_dp:.3f} -> {attacked_dp:.3f} -> {defended_dp:.3f}")
+    
+    # Statistical Significance Testing
+    print("\n--- Statistical Significance Testing ---")
+    from defenses.defense_mechanisms import StatisticalSignificance
+    
+    tester = StatisticalSignificance(confidence_level=0.95)
+    
+    # Collect per-timestep detection probabilities for each condition
+    def collect_dp_series(detections_list, sensor_id):
+        dets_by_time = defaultdict(list)
+        for d in detections_list:
+            dets_by_time[d.time].append(d)
+        
+        gt_by_time = {}
+        for i, timestep in enumerate(loader.ground_truth):
+            if timestep and i < len(loader.detections):
+                gt_by_time[loader.detections[i].time] = timestep
+        
+        dps = []
+        for t in sorted(dets_by_time.keys()):
+            gt_at_t = gt_by_time.get(t, [])
+            if not gt_at_t:
+                continue
+            s_dets = [d for d in dets_by_time[t] if d.sensor_id == sensor_id]
+            if not s_dets:
+                continue
+            m = evaluator.evaluate(s_dets, gt_at_t, sensor_id)
+            dps.append(m.detection_probability)
+        
+        return np.array(dps)
+    
+    for sid in [3, 4]:  # Camera sensors
+        benign_series = collect_dp_series(benign_dets, sid)
+        attacked_series = collect_dp_series(test_attacked, sid)
+        defended_series = collect_dp_series(defended, sid)
+        
+        if len(benign_series) > 1:
+            results = tester.compare_three_conditions(
+                benign_series, attacked_series, defended_series
+            )
+            tester.print_summary(results, f"{SENSOR_NAMES[sid]} DetProb")
+
+
 def main():
     """Run all demo phases."""
     print("\n" + "=" * 70)
@@ -651,6 +821,9 @@ def main():
     
     # Phase 6: Visualization
     phase6_visualization(loader)
+    
+    # Phase 7: Advanced Fusion Attacks & Defenses
+    phase7_advanced_fusion_attacks(loader)
     
     # Full Pipeline
     full_pipeline_demo()

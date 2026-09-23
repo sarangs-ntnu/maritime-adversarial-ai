@@ -42,6 +42,10 @@ class FusionAttackType(Enum):
     FALSE_TRACK_INJECTION = "false_track_injection"
     TRACK_MERGE_MANIPULATION = "track_merge_manipulation"
     SENSOR_DOS = "sensor_dos"
+    # New track-oriented attacks
+    TRACK_DELETION = "track_deletion"  # Target specific track for deletion
+    TRACK_SWAP = "track_swap"  # Swap identities between two tracks
+    STEALTHY_DEGRADATION = "stealthy_degradation"  # Slowly degrade track quality
 
 
 @dataclass
@@ -358,6 +362,12 @@ class FusionAttacker:
             attacked_detections = self._false_track_injection_attack(loader, all_times)
         elif self.config.attack_type == FusionAttackType.SENSOR_DOS:
             attacked_detections = self._sensor_dos_attack(loader, all_times)
+        elif self.config.attack_type == FusionAttackType.TRACK_DELETION:
+            attacked_detections = self._track_deletion_attack(loader, all_times, target_track_id)
+        elif self.config.attack_type == FusionAttackType.TRACK_SWAP:
+            attacked_detections = self._track_swap_attack(loader, all_times)
+        elif self.config.attack_type == FusionAttackType.STEALTHY_DEGRADATION:
+            attacked_detections = self._stealthy_degradation_attack(loader, all_times)
         else:
             # No attack - return original
             for t in all_times:
@@ -628,6 +638,253 @@ class FusionAttacker:
                         perturbed_dets.append(det)
                 else:
                     perturbed_dets.append(det)
+            
+            attacked_detections[t] = perturbed_dets
+        
+        return attacked_detections
+    
+    def _track_deletion_attack(self, loader: ScenarioLoader,
+                               all_times: List[float],
+                               target_track_id: Optional[int]) -> Dict[float, List[Detection]]:
+        """Targeted track deletion attack.
+        
+        Strategy: Identify which detections associate with a specific target
+        track and suppress only those, leaving other tracks unaffected.
+        More stealthy than existence suppression which affects all targets.
+        """
+        attacked_detections: Dict[float, List[Detection]] = {}
+        
+        # Get target trajectory
+        if target_track_id is not None and target_track_id in loader.target_ids:
+            gt_times, gt_positions = loader.get_target_trajectory(target_track_id)
+        else:
+            # Default: target the first target
+            gt_times, gt_positions = loader.get_target_trajectory(loader.target_ids[0])
+        
+        # Build time-indexed target positions
+        target_positions = {}
+        for gt_time, gt_pos in zip(gt_times, gt_positions):
+            target_positions[gt_time] = gt_pos[:2]
+        
+        for t in all_times:
+            dets = loader.get_detections_at_time(t)
+            perturbed_dets = []
+            
+            # Get target position at this time
+            gt_pos = target_positions.get(t, None)
+            
+            for det in dets:
+                if gt_pos is not None and len(det.measurement) > 0:
+                    # Check if detection is near target
+                    det_pos = det.to_piren_ned()
+                    if det_pos is not None:
+                        if det_pos.ndim > 1:
+                            det_pos = det_pos[0]
+                        det_pos = det_pos[:2]
+                        
+                        dist = np.linalg.norm(det_pos - gt_pos)
+                        
+                        if dist < 40.0:  # Within 40m of target
+                            # Suppress only this target's detections
+                            if det.is_active:
+                                # Move slightly outside gate (stealthy)
+                                shift = np.array([15.0, 15.0])
+                                if det.measurement.ndim > 1:
+                                    p = det.measurement.copy()
+                                    for i in range(len(p)):
+                                        p[i, :2] += shift
+                                else:
+                                    p = det.measurement.copy()
+                                    p[:2] += shift
+                                perturbed = Detection(
+                                    sensor_id=det.sensor_id,
+                                    time=det.time,
+                                    ownship_position=det.ownship_position.copy(),
+                                    measurement=p
+                                )
+                            else:
+                                # Small bearing shift (stealthy)
+                                perturbed = Detection(
+                                    sensor_id=det.sensor_id,
+                                    time=det.time,
+                                    ownship_position=det.ownship_position.copy(),
+                                    measurement=det.measurement + 0.15
+                                )
+                            perturbed_dets.append(perturbed)
+                        else:
+                            perturbed_dets.append(det)
+                    else:
+                        perturbed_dets.append(det)
+                else:
+                    perturbed_dets.append(det)
+            
+            attacked_detections[t] = perturbed_dets
+        
+        return attacked_detections
+    
+    def _track_swap_attack(self, loader: ScenarioLoader,
+                           all_times: List[float]) -> Dict[float, List[Detection]]:
+        """Track identity swap attack.
+        
+        Strategy: Swap the measurements of two targets so that
+        the tracker associates detections with the wrong target.
+        Causes identity confusion between two vessels.
+        """
+        attacked_detections: Dict[float, List[Detection]] = {}
+        
+        if len(loader.target_ids) < 2:
+            # Need at least 2 targets to swap
+            for t in all_times:
+                attacked_detections[t] = loader.get_detections_at_time(t)
+            return attacked_detections
+        
+        # Get two targets to swap
+        target_a = loader.target_ids[0]
+        target_b = loader.target_ids[1]
+        
+        gt_times_a, gt_positions_a = loader.get_target_trajectory(target_a)
+        gt_times_b, gt_positions_b = loader.get_target_trajectory(target_b)
+        
+        # Build time-indexed positions
+        pos_a = {t: p[:2] for t, p in zip(gt_times_a, gt_positions_a)}
+        pos_b = {t: p[:2] for t, p in zip(gt_times_b, gt_positions_b)}
+        
+        for t in all_times:
+            dets = loader.get_detections_at_time(t)
+            perturbed_dets = []
+            
+            pos_a_t = pos_a.get(t, None)
+            pos_b_t = pos_b.get(t, None)
+            
+            for det in dets:
+                if len(det.measurement) == 0 or pos_a_t is None or pos_b_t is None:
+                    perturbed_dets.append(det)
+                    continue
+                
+                det_pos = det.to_piren_ned()
+                if det_pos is None:
+                    perturbed_dets.append(det)
+                    continue
+                
+                if det_pos.ndim > 1:
+                    det_pos = det_pos[0]
+                det_pos = det_pos[:2]
+                
+                dist_a = np.linalg.norm(det_pos - pos_a_t)
+                dist_b = np.linalg.norm(det_pos - pos_b_t)
+                
+                if dist_a < 40.0:
+                    # Detection belongs to target A, redirect toward B
+                    if det.is_active:
+                        # Compute vector from ownship to B
+                        ownship = det.ownship_position
+                        target_b_ownship = pos_b_t - ownship
+                        perturbed = Detection(
+                            sensor_id=det.sensor_id,
+                            time=det.time,
+                            ownship_position=ownship.copy(),
+                            measurement=target_b_ownship
+                        )
+                    else:
+                        # Redirect bearing toward B
+                        bearing_to_b = np.arctan2(pos_b_t[1] - det.ownship_position[1],
+                                                   pos_b_t[0] - det.ownship_position[0])
+                        perturbed = Detection(
+                            sensor_id=det.sensor_id,
+                            time=det.time,
+                            ownship_position=det.ownship_position.copy(),
+                            measurement=np.array([bearing_to_b])
+                        )
+                    perturbed_dets.append(perturbed)
+                
+                elif dist_b < 40.0:
+                    # Detection belongs to target B, redirect toward A
+                    if det.is_active:
+                        ownship = det.ownship_position
+                        target_a_ownship = pos_a_t - ownship
+                        perturbed = Detection(
+                            sensor_id=det.sensor_id,
+                            time=det.time,
+                            ownship_position=ownship.copy(),
+                            measurement=target_a_ownship
+                        )
+                    else:
+                        bearing_to_a = np.arctan2(pos_a_t[1] - det.ownship_position[1],
+                                                   pos_a_t[0] - det.ownship_position[0])
+                        perturbed = Detection(
+                            sensor_id=det.sensor_id,
+                            time=det.time,
+                            ownship_position=det.ownship_position.copy(),
+                            measurement=np.array([bearing_to_a])
+                        )
+                    perturbed_dets.append(perturbed)
+                
+                else:
+                    perturbed_dets.append(det)
+            
+            attacked_detections[t] = perturbed_dets
+        
+        return attacked_detections
+    
+    def _stealthy_degradation_attack(self, loader: ScenarioLoader,
+                                     all_times: List[float]) -> Dict[float, List[Detection]]:
+        """Stealthy track quality degradation.
+        
+        Strategy: Gradually increase perturbation over time to slowly
+        degrade track quality without triggering anomaly detectors.
+        The track remains but with increasing position error.
+        """
+        attacked_detections: Dict[float, List[Detection]] = {}
+        
+        if len(all_times) == 0:
+            return attacked_detections
+        
+        start_time = all_times[0]
+        end_time = all_times[-1]
+        duration = end_time - start_time
+        
+        for t in all_times:
+            dets = loader.get_detections_at_time(t)
+            perturbed_dets = []
+            
+            # Compute degradation factor (0 to 1 over scenario)
+            progress = (t - start_time) / duration if duration > 0 else 0
+            degradation = progress * 0.3  # Max 0.3 rad / 15m shift
+            
+            for det in dets:
+                if len(det.measurement) == 0:
+                    perturbed_dets.append(det)
+                    continue
+                
+                if det.is_active:
+                    # Gradually shift position
+                    shift = degradation * 15.0  # Max 15m
+                    direction = np.array([1.0, 0.5])  # Consistent direction
+                    
+                    if det.measurement.ndim > 1:
+                        p = det.measurement.copy()
+                        for i in range(len(p)):
+                            p[i, :2] += shift * direction
+                    else:
+                        p = det.measurement.copy()
+                        p[:2] += shift * direction
+                    
+                    perturbed = Detection(
+                        sensor_id=det.sensor_id,
+                        time=det.time,
+                        ownship_position=det.ownship_position.copy(),
+                        measurement=p
+                    )
+                else:
+                    # Gradually shift bearing
+                    perturbed = Detection(
+                        sensor_id=det.sensor_id,
+                        time=det.time,
+                        ownship_position=det.ownship_position.copy(),
+                        measurement=det.measurement + degradation * 0.2
+                    )
+                
+                perturbed_dets.append(perturbed)
             
             attacked_detections[t] = perturbed_dets
         

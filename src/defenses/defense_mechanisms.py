@@ -34,6 +34,7 @@ class DefenseType(Enum):
     ANOMALY_DETECTION = "anomaly_detection"
     RANDOMIZED_SMOOTHING = "randomized_smoothing"
     ENSEMBLE_DETECTION = "ensemble_detection"
+    ADVERSARIAL_TRAINING = "adversarial_training"
     ALL = "all"
 
 
@@ -538,9 +539,265 @@ class CertifiedDefense:
         return smoothed_detection, certified_radius
 
 
+class AdversarialTraining:
+    """Adversarial training defense.
+    
+    Trains a robust detector by augmenting benign data with adversarial
+    examples during training. For our tracker, this means building
+    robust statistics that account for adversarial perturbations.
+    """
+    
+    def __init__(self, augmentation_ratio: float = 0.3):
+        """
+        Args:
+            augmentation_ratio: Fraction of training data to replace with
+                               adversarial examples (0.0 to 1.0)
+        """
+        self.augmentation_ratio = augmentation_ratio
+        self.robust_statistics: Dict[int, Dict] = {}
+    
+    def train(self, benign_detections: List[Detection],
+              attacked_detections: List[Detection]):
+        """Train robust statistics on mixed benign + adversarial data.
+        
+        Computes per-sensor robust mean and covariance that account
+        for adversarial perturbations.
+        """
+        # Group by sensor
+        benign_by_sensor: Dict[int, List[Detection]] = {i: [] for i in range(1, 5)}
+        attacked_by_sensor: Dict[int, List[Detection]] = {i: [] for i in range(1, 5)}
+        
+        for d in benign_detections:
+            benign_by_sensor[d.sensor_id].append(d)
+        for d in attacked_detections:
+            attacked_by_sensor[d.sensor_id].append(d)
+        
+        for sensor_id in range(1, 5):
+            b_dets = benign_by_sensor[sensor_id]
+            a_dets = attacked_by_sensor[sensor_id]
+            
+            if len(b_dets) == 0:
+                continue
+            
+            # Extract measurements
+            b_meas = self._extract_measurements(b_dets)
+            a_meas = self._extract_measurements(a_dets)
+            
+            # Mix data: (1 - ratio) benign + ratio adversarial
+            n_adv = int(len(b_meas) * self.augmentation_ratio)
+            if len(a_meas) > 0 and n_adv > 0:
+                mixed = np.vstack([
+                    b_meas[:len(b_meas) - n_adv],
+                    a_meas[:min(n_adv, len(a_meas))]
+                ])
+            else:
+                mixed = b_meas
+            
+            # Compute robust statistics
+            self.robust_statistics[sensor_id] = {
+                'mean': np.mean(mixed, axis=0),
+                'std': np.std(mixed, axis=0) + 1e-6,
+                'median': np.median(mixed, axis=0),
+                'mad': np.median(np.abs(mixed - np.median(mixed, axis=0)), axis=0) + 1e-6
+            }
+    
+    def _extract_measurements(self, detections: List[Detection]) -> np.ndarray:
+        """Extract flat measurement array from detections."""
+        meas = []
+        for d in detections:
+            if len(d.measurement) == 0:
+                continue
+            if d.measurement.ndim > 1:
+                for row in d.measurement:
+                    meas.append(row[:2])
+            else:
+                if d.is_active:
+                    meas.append(d.measurement[:2])
+                else:
+                    # Convert bearing to unit vector
+                    b = d.measurement[0]
+                    meas.append([np.cos(b), np.sin(b)])
+        return np.array(meas) if meas else np.zeros((1, 2))
+    
+    def defend(self, detection: Detection) -> Detection:
+        """Apply adversarial training defense to a detection.
+        
+        Uses robust statistics to detect and correct adversarial outliers.
+        """
+        if len(detection.measurement) == 0:
+            return detection
+        
+        stats = self.robust_statistics.get(detection.sensor_id)
+        if stats is None:
+            return detection
+        
+        if detection.is_active:
+            # For active sensors, clip outliers to robust range
+            if detection.measurement.ndim > 1:
+                corrected = detection.measurement.copy()
+                for i in range(len(corrected)):
+                    deviation = np.abs(corrected[i, :2] - stats['median'])
+                    is_outlier = deviation > 3 * stats['mad']
+                    corrected[i, :2] = np.where(
+                        is_outlier,
+                        stats['median'] + np.sign(corrected[i, :2] - stats['median']) * 3 * stats['mad'],
+                        corrected[i, :2]
+                    )
+            else:
+                deviation = np.abs(detection.measurement[:2] - stats['median'])
+                is_outlier = deviation > 3 * stats['mad']
+                corrected = np.where(
+                    is_outlier,
+                    stats['median'] + np.sign(detection.measurement[:2] - stats['median']) * 3 * stats['mad'],
+                    detection.measurement[:2]
+                )
+                if len(detection.measurement) > 2:
+                    corrected = np.append(corrected, detection.measurement[2:])
+            
+            return Detection(
+                sensor_id=detection.sensor_id,
+                time=detection.time,
+                ownship_position=detection.ownship_position.copy(),
+                measurement=corrected
+            )
+        else:
+            # For passive sensors, check bearing deviation
+            b = detection.measurement[0]
+            b_vec = np.array([np.cos(b), np.sin(b)])
+            median_b = np.arctan2(stats['median'][1], stats['median'][0])
+            deviation = np.abs(self._angle_diff(b, median_b))
+            
+            if deviation > 3 * np.mean(stats['mad']):
+                # Correct toward median
+                corrected_b = median_b + np.sign(self._angle_diff(b, median_b)) * 3 * np.mean(stats['mad'])
+                return Detection(
+                    sensor_id=detection.sensor_id,
+                    time=detection.time,
+                    ownship_position=detection.ownship_position.copy(),
+                    measurement=np.array([corrected_b])
+                )
+            return detection
+    
+    @staticmethod
+    def _angle_diff(a: float, b: float) -> float:
+        """Compute smallest signed angle difference."""
+        diff = a - b
+        while diff > np.pi:
+            diff -= 2 * np.pi
+        while diff < -np.pi:
+            diff += 2 * np.pi
+        return diff
+
+
+class StatisticalSignificance:
+    """Statistical significance testing for adversarial AI evaluation.
+    
+    Computes paired t-tests and confidence intervals to determine
+    whether attack/defense effects are statistically significant.
+    """
+    
+    def __init__(self, confidence_level: float = 0.95):
+        self.confidence_level = confidence_level
+        self.alpha = 1 - confidence_level
+    
+    def paired_ttest(self, benign_scores: np.ndarray,
+                     attacked_scores: np.ndarray) -> Dict[str, float]:
+        """Paired t-test: benign vs attacked.
+        
+        Returns:
+            Dict with t_statistic, p_value, mean_diff, ci_lower, ci_upper
+        """
+        if len(benign_scores) != len(attacked_scores):
+            min_len = min(len(benign_scores), len(attacked_scores))
+            benign_scores = benign_scores[:min_len]
+            attacked_scores = attacked_scores[:min_len]
+        
+        differences = benign_scores - attacked_scores
+        n = len(differences)
+        
+        if n < 2:
+            return {
+                't_statistic': 0.0,
+                'p_value': 1.0,
+                'mean_diff': 0.0,
+                'ci_lower': 0.0,
+                'ci_upper': 0.0,
+                'significant': False
+            }
+        
+        mean_diff = np.mean(differences)
+        std_diff = np.std(differences, ddof=1)
+        se_diff = std_diff / np.sqrt(n)
+        
+        # t-statistic
+        t_stat = mean_diff / (se_diff + 1e-10)
+        
+        # Approximate p-value using normal for large n, t-distribution for small
+        from math import erf, sqrt
+        p_value = 2 * (1 - 0.5 * (1 + erf(abs(t_stat) / sqrt(2))))
+        
+        # Confidence interval
+        if n >= 30:
+            z_crit = 1.96  # 95% CI
+        else:
+            z_crit = 2.262  # t_0.025,9 approx
+        
+        margin = z_crit * se_diff
+        ci_lower = mean_diff - margin
+        ci_upper = mean_diff + margin
+        
+        return {
+            't_statistic': float(t_stat),
+            'p_value': float(p_value),
+            'mean_diff': float(mean_diff),
+            'ci_lower': float(ci_lower),
+            'ci_upper': float(ci_upper),
+            'significant': p_value < self.alpha,
+            'n_samples': n
+        }
+    
+    def compare_three_conditions(self,
+                                  benign: np.ndarray,
+                                  attacked: np.ndarray,
+                                  defended: np.ndarray) -> Dict[str, Dict]:
+        """Compare benign vs attacked vs defended.
+        
+        Returns pairwise comparisons with significance indicators.
+        """
+        results = {}
+        
+        results['benign_vs_attacked'] = self.paired_ttest(benign, attacked)
+        results['attacked_vs_defended'] = self.paired_ttest(attacked, defended)
+        results['benign_vs_defended'] = self.paired_ttest(benign, defended)
+        
+        # Effect sizes (Cohen's d)
+        for key in results:
+            diff = results[key]['mean_diff']
+            # Pooled std
+            if 'benign_vs_attacked' in key:
+                pooled_std = np.std(np.concatenate([benign, attacked]))
+            elif 'attacked_vs_defended' in key:
+                pooled_std = np.std(np.concatenate([attacked, defended]))
+            else:
+                pooled_std = np.std(np.concatenate([benign, defended]))
+            
+            results[key]['cohens_d'] = float(diff / (pooled_std + 1e-10))
+        
+        return results
+    
+    def print_summary(self, results: Dict[str, Dict], metric_name: str = "Metric"):
+        """Print formatted statistical summary."""
+        print(f"\n  Statistical Significance: {metric_name}")
+        print(f"  {'Comparison':<25} {'Mean Diff':>10} {'p-value':>10} {'Significant':>12} {'Cohen\'s d':>10}")
+        print(f"  {'-' * 75}")
+        for comparison, stats in results.items():
+            sig = "YES ***" if stats['significant'] else "No"
+            print(f"  {comparison:<25} {stats['mean_diff']:>10.4f} {stats['p_value']:>10.4f} {sig:>12} {stats['cohens_d']:>10.3f}")
+
+
 class DefensePipeline:
     """Pipeline combining multiple defense mechanisms."""
-    
+
     def __init__(self, config: DefenseConfig):
         self.config = config
         self.sanitizer = InputSanitizer(threshold=config.outlier_threshold)
@@ -560,6 +817,12 @@ class DefensePipeline:
             num_samples=50,
             noise_std=0.05,
             confidence=0.99
+        )
+        self.adversarial_trainer = AdversarialTraining(
+            augmentation_ratio=0.3
+        )
+        self.statistical_tester = StatisticalSignificance(
+            confidence_level=0.95
         )
     
     def defend(self, detections: List[Detection]) -> List[Detection]:
@@ -647,7 +910,19 @@ class DefensePipeline:
             validated, _ = self.agreement.validate(normal_dets)
             return validated
         
+        if defense_type == DefenseType.ADVERSARIAL_TRAINING:
+            # Apply adversarial training defense
+            defended = []
+            for det in detections:
+                defended.append(self.adversarial_trainer.defend(det))
+            return defended
+        
         return detections
+    
+    def train_adversarial(self, benign_detections: List[Detection],
+                          attacked_detections: List[Detection]):
+        """Train adversarial training defense on mixed data."""
+        self.adversarial_trainer.train(benign_detections, attacked_detections)
     
     def _apply_all_defenses(self, detections: List[Detection]) -> List[Detection]:
         """Apply all defense mechanisms in sequence (less aggressive)."""
