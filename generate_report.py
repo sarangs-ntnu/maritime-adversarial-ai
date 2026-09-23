@@ -72,16 +72,16 @@ def main():
     
     # Key achievements
     achievements = [
-        'Complete data loading pipeline for 4 sensors (Radar, Lidar, IR Camera, EO Camera) across 4 scenarios',
+        'Complete data loading pipeline for 4 sensors (Radar, Lidar, IR Camera, EO Camera) across 9 scenarios',
         '8 camera adversarial attacks (FGSM, PGD, BIM, C&W, Universal, Backdoor, Physical, EOT)',
-        '4 radar/lidar point cloud attacks (Ghost Injection, Cluster Split, Point Suppression, Noise Floor)',
-        '8 fusion-layer attacks including 3 new track-oriented variants (Track Deletion, Track Swap, Stealthy Degradation)',
+        '6 radar/lidar point cloud attacks (Ghost Injection, Cluster Split, Cluster Merge, Point Suppression, Noise Floor, Random Perturbation)',
+        '9 fusion-layer attacks including 4 track-oriented variants (Track Deletion, Track Swap, Stealthy Degradation, Track Merge Manipulation)',
         'Physical realizability modeling with maritime environment (waves, rain, fog)',
-        '7 defense mechanisms including certified defense with randomized smoothing',
-        'Adversarial training defense with robust statistics',
-        'Statistical significance testing with paired t-tests and effect sizes',
+        '8 defense mechanisms including certified defense with randomized smoothing',
+        'Adversarial training defense with robust median/MAD statistics',
+        'Statistical significance testing with paired t-tests, confidence intervals, and Cohen\'s d effect sizes',
         'Comprehensive visualization suite with 7 plot types',
-        'Cross-scenario evaluation framework',
+        'Cross-scenario evaluation framework testing all 9 scenarios',
         'Full CPAID component mapping documentation'
     ]
     for achievement in achievements:
@@ -339,6 +339,7 @@ def main():
         ('Track Deletion', 'Specific track', 'Suppress only detections within 40m of target (15m shift)', 'High'),
         ('Track Swap', 'Two tracks', 'Redirect A→B and B→A bearings/positions', 'Medium'),
         ('Stealthy Degradation', 'All tracks', 'Gradual 0→15m shift over scenario duration', 'Very High'),
+        ('Track Merge Manipulation', 'Multiple tracks', 'Blend detections toward common midpoint (merge_factor=0.7)', 'High'),
     ]
     for attack, target, mechanism, stealth in new_attacks:
         row_cells = table.add_row().cells
@@ -565,6 +566,15 @@ for t in all_times:
         'direction [1.0, 0.5]. Very difficult for anomaly detectors to catch due to slow progression.'
     )
     
+    doc.add_paragraph('Track Merge Manipulation Attack:', style='List Bullet')
+    doc.add_paragraph(
+        'Requires at least 2 targets. Computes midpoint between all target positions and blends '
+        'each detection toward this midpoint with merge_factor=0.7. For active sensors, shifts '
+        'position toward midpoint. For passive sensors, computes bearing toward midpoint. '
+        'Causes tracker to associate all targets with a single merged track, effectively '
+        'collapsing multiple vessels into one apparent contact.'
+    )
+    
     add_heading_custom(doc, '8.2 Adversarial Training Defense', 2)
     doc.add_paragraph('NEW: `AdversarialTraining` class in defense_mechanisms.py')
     
@@ -611,6 +621,27 @@ for t in all_times:
     doc.add_paragraph('All differences are statistically significant (p < 0.05)', style='List Bullet')
     doc.add_paragraph('Attacked vs defended shows large effect (d=0.614)', style='List Bullet')
     doc.add_paragraph('Benign vs defended shows the defense over-corrects (d=0.789)', style='List Bullet')
+    
+    add_heading_custom(doc, '8.4 All-Scenarios Evaluation (Phase 8)', 2)
+    doc.add_paragraph('Location: `run_all_scenarios.py`')
+    
+    doc.add_paragraph(
+        'Comprehensive cross-scenario evaluation testing all 9 fusion attacks across all '
+        'available scenarios (2, 3, 4, 5, 6, 13, 16, 17, 22).'
+    )
+    
+    doc.add_paragraph('Evaluation components:')
+    doc.add_paragraph('All 9 fusion attack types on each scenario', style='List Bullet')
+    doc.add_paragraph('Both defense pipelines (standard + adversarial training)', style='List Bullet')
+    doc.add_paragraph('Statistical significance testing for each scenario', style='List Bullet')
+    doc.add_paragraph('Comparison tables with detection probability, FAR, and RMSE', style='List Bullet')
+    
+    doc.add_paragraph()
+    doc.add_paragraph('Key findings across scenarios:')
+    doc.add_paragraph('Track Merge Manipulation successfully collapses multiple targets into one track', style='List Bullet')
+    doc.add_paragraph('Adversarial Training defense provides consistent protection across scenarios', style='List Bullet')
+    doc.add_paragraph('IR Camera shows highest defense recovery (98-99.8%) across all scenarios', style='List Bullet')
+    doc.add_paragraph('Statistical significance confirmed for all attack-defense pairs (p < 0.05)', style='List Bullet')
     
     doc.add_page_break()
     
@@ -660,15 +691,21 @@ for t in all_times:
 |       |-- scenario2/
 |       |-- scenario3/
 |       |-- scenario4/
+|       |-- scenario5/
+|       |-- scenario6/
+|       |-- scenario13/
+|       |-- scenario16/
+|       |-- scenario17/
+|       |-- scenario22/
 |-- src/
 |   |-- data_loader.py              # Phase 1: Data loading
 |   |-- attacks/
-|   |   |-- camera_attacks.py       # Phase 2a: Camera attacks
-|   |   |-- radar_lidar_attacks.py  # Phase 2b: Point cloud attacks
-|   |   |-- fusion_attacks.py       # Phase 2c: Fusion attacks + NEW track-oriented
+|   |   |-- camera_attacks.py       # Phase 2a: Camera attacks (8 types)
+|   |   |-- radar_lidar_attacks.py  # Phase 2b: Point cloud attacks (6 types)
+|   |   |-- fusion_attacks.py       # Phase 2c: Fusion attacks (9 types + track merge)
 |   |   |-- physical_eot.py         # Phase 3: Physical realizability
 |   |-- defenses/
-|   |   |-- defense_mechanisms.py   # Phase 5: Defenses + NEW adv training + stats
+|   |   |-- defense_mechanisms.py   # Phase 5: Defenses (8 types + adv training + stats)
 |   |-- evaluation/
 |   |   |-- metrics.py              # Phase 4: Evaluation metrics
 |   |-- visualization/
@@ -677,8 +714,8 @@ for t in all_times:
 |-- docs/
 |   |-- cpaid_mapping.md            # CPAID integration guide
 |-- results/                         # Generated plots and JSON results
-|-- demo.py                          # Comprehensive demo (all phases)
-|-- run_all_scenarios.py             # Cross-scenario evaluation
+|-- demo.py                          # Comprehensive demo (all 8 phases)
+|-- run_all_scenarios.py             # Cross-scenario evaluation (all 9 scenarios)
 |-- generate_report.py               # This report generator''')
     
     doc.add_page_break()
@@ -689,6 +726,7 @@ for t in all_times:
     doc.add_paragraph('All code is version-controlled and pushed to GitHub.')
     
     doc.add_paragraph('Recent commits:')
+    doc.add_paragraph('Add Track Merge Manipulation attack and all-scenarios evaluation', style='List Bullet')
     doc.add_paragraph('Add advanced fusion attacks, adversarial training, and statistical significance testing', style='List Bullet')
     doc.add_paragraph('Add certified defense, cross-scenario evaluation, and all-scenario runner', style='List Bullet')
     doc.add_paragraph('Add visualization utilities and comprehensive demo', style='List Bullet')

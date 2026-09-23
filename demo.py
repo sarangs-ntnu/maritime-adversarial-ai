@@ -709,6 +709,21 @@ def phase7_advanced_fusion_attacks(loader):
         dp = eval_per_timestep(attacked_list, sid)
         print(f"    {SENSOR_NAMES[sid]} DetProb: {dp:.3f}")
     
+    # Test track merge manipulation attack
+    print("\n--- Track Merge Manipulation Attack ---")
+    config = FusionAttackConfig(FusionAttackType.TRACK_MERGE_MANIPULATION)
+    attacker = FusionAttacker(config)
+    attacked = attacker.attack_scenario(loader)
+    
+    attacked_list = []
+    for t in sorted(attacked.keys()):
+        attacked_list.extend(attacked[t])
+    
+    print(f"  Attacked detections: {len(attacked_list)}")
+    for sid in [1, 2, 3, 4]:
+        dp = eval_per_timestep(attacked_list, sid)
+        print(f"    {SENSOR_NAMES[sid]} DetProb: {dp:.3f}")
+    
     # Adversarial Training Defense
     print("\n--- Adversarial Training Defense ---")
     
@@ -796,6 +811,52 @@ def phase7_advanced_fusion_attacks(loader):
             tester.print_summary(results, f"{SENSOR_NAMES[sid]} DetProb")
 
 
+def phase8_all_scenarios():
+    """Phase 8: Run evaluation on all available scenarios."""
+    print("\n" + "=" * 70)
+    print("PHASE 8: ALL SCENARIOS EVALUATION")
+    print("=" * 70)
+    
+    from pathlib import Path
+    data_dir = Path("data/sensor_fusion_dataset")
+    
+    # Find available scenarios
+    available_scenarios = []
+    for scenario_dir in data_dir.glob("scenario*"):
+        if scenario_dir.is_dir():
+            available_scenarios.append(scenario_dir.name)
+    
+    available_scenarios.sort()
+    print(f"\nAvailable scenarios: {available_scenarios}")
+    
+    for scenario_name in available_scenarios:
+        print(f"\n--- {scenario_name} ---")
+        try:
+            loader = ScenarioLoader(scenario_name, str(data_dir))
+            print(f"  Detections: {len(loader.detections)}")
+            print(f"  Targets: {len(loader.target_ids)}")
+            
+            # Quick attack test
+            from attacks.fusion_attacks import FusionAttacker, FusionAttackConfig, FusionAttackType
+            config = FusionAttackConfig(FusionAttackType.TRACK_MERGE_MANIPULATION)
+            attacker = FusionAttacker(config)
+            attacked = attacker.attack_scenario(loader)
+            
+            attacked_list = []
+            for t in sorted(attacked.keys()):
+                attacked_list.extend(attacked[t])
+            
+            # Count tracks
+            from attacks.fusion_attacks import JIPDASimulator
+            tracker = JIPDASimulator()
+            tracks = tracker.track(attacked_list)
+            print(f"  Benign tracks: {len(loader.target_ids)}")
+            print(f"  Track merge tracks: {len(tracks)}")
+            
+        except Exception as e:
+            print(f"  ERROR: {e}")
+
+
 def main():
     """Run all demo phases."""
     print("\n" + "=" * 70)
@@ -824,6 +885,9 @@ def main():
     
     # Phase 7: Advanced Fusion Attacks & Defenses
     phase7_advanced_fusion_attacks(loader)
+    
+    # Phase 8: All Scenarios
+    phase8_all_scenarios()
     
     # Full Pipeline
     full_pipeline_demo()

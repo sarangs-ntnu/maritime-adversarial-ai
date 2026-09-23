@@ -362,6 +362,8 @@ class FusionAttacker:
             attacked_detections = self._false_track_injection_attack(loader, all_times)
         elif self.config.attack_type == FusionAttackType.SENSOR_DOS:
             attacked_detections = self._sensor_dos_attack(loader, all_times)
+        elif self.config.attack_type == FusionAttackType.TRACK_MERGE_MANIPULATION:
+            attacked_detections = self._track_merge_manipulation_attack(loader, all_times)
         elif self.config.attack_type == FusionAttackType.TRACK_DELETION:
             attacked_detections = self._track_deletion_attack(loader, all_times, target_track_id)
         elif self.config.attack_type == FusionAttackType.TRACK_SWAP:
@@ -636,6 +638,112 @@ class FusionAttacker:
                     # Randomly drop with probability
                     if np.random.random() > self.config.dos_probability:
                         perturbed_dets.append(det)
+                else:
+                    perturbed_dets.append(det)
+            
+            attacked_detections[t] = perturbed_dets
+        
+        return attacked_detections
+    
+    def _track_merge_manipulation_attack(self, loader: ScenarioLoader,
+                                         all_times: List[float]) -> Dict[float, List[Detection]]:
+        """Force multiple tracks to merge into one.
+        
+        Strategy: Move detections from multiple targets toward a common
+        midpoint between them. This causes the tracker to associate all
+        detections with a single track, effectively merging targets.
+        """
+        attacked_detections: Dict[float, List[Detection]] = {}
+        
+        if len(loader.target_ids) < 2:
+            # Need at least 2 targets to merge
+            for t in all_times:
+                attacked_detections[t] = loader.get_detections_at_time(t)
+            return attacked_detections
+        
+        # Get trajectories for all targets
+        target_trajectories = {}
+        for tid in loader.target_ids:
+            gt_times, gt_positions = loader.get_target_trajectory(tid)
+            target_trajectories[tid] = {
+                t: p[:2] for t, p in zip(gt_times, gt_positions)
+            }
+        
+        for t in all_times:
+            dets = loader.get_detections_at_time(t)
+            perturbed_dets = []
+            
+            # Compute midpoint of all targets at this time
+            positions_at_t = []
+            for tid, traj in target_trajectories.items():
+                if t in traj:
+                    positions_at_t.append(traj[t])
+            
+            if len(positions_at_t) < 2:
+                # Not enough targets at this time
+                attacked_detections[t] = dets
+                continue
+            
+            midpoint = np.mean(positions_at_t, axis=0)
+            
+            for det in dets:
+                if len(det.measurement) == 0:
+                    perturbed_dets.append(det)
+                    continue
+                
+                det_pos = det.to_piren_ned()
+                if det_pos is None:
+                    perturbed_dets.append(det)
+                    continue
+                
+                if det_pos.ndim > 1:
+                    det_pos = det_pos[0]
+                det_pos = det_pos[:2]
+                
+                # Check if detection is near any target
+                near_target = False
+                for tid, traj in target_trajectories.items():
+                    if t in traj:
+                        dist = np.linalg.norm(det_pos - traj[t])
+                        if dist < 50.0:
+                            near_target = True
+                            break
+                
+                if near_target:
+                    # Move detection toward midpoint (merge factor: 0.7 toward midpoint)
+                    merge_factor = 0.7
+                    if det.is_active:
+                        ownship = det.ownship_position
+                        # Target position in ownship frame
+                        target_ownship = midpoint - ownship
+                        # Blend original measurement toward midpoint
+                        if det.measurement.ndim > 1:
+                            p = det.measurement.copy()
+                            for i in range(len(p)):
+                                p[i, :2] = (1 - merge_factor) * p[i, :2] + merge_factor * target_ownship
+                        else:
+                            p = det.measurement.copy()
+                            p[:2] = (1 - merge_factor) * p[:2] + merge_factor * target_ownship
+                        
+                        perturbed = Detection(
+                            sensor_id=det.sensor_id,
+                            time=det.time,
+                            ownship_position=ownship.copy(),
+                            measurement=p
+                        )
+                    else:
+                        # For passive sensors, compute bearing to midpoint
+                        bearing_to_mid = np.arctan2(
+                            midpoint[1] - det.ownship_position[1],
+                            midpoint[0] - det.ownship_position[0]
+                        )
+                        perturbed = Detection(
+                            sensor_id=det.sensor_id,
+                            time=det.time,
+                            ownship_position=det.ownship_position.copy(),
+                            measurement=np.array([bearing_to_mid])
+                        )
+                    perturbed_dets.append(perturbed)
                 else:
                     perturbed_dets.append(det)
             
